@@ -161,7 +161,10 @@ if ($ccflags =~ /^\s*$/ ) {
 }
 
 ## Swig produces a number of GCC warnings. Turn them off if we can.
-$ccflags .= try_cflags("-Wno-strict-aliasing");
+#$ccflags .= try_cflags("-Wno-strict-aliasing");
+$ccflags .= try_cflags("-Wall");
+$ccflags .= try_cflags("-g");
+$ccflags .= try_cflags("-Wno-nonnull");
 $ccflags .= try_cflags("-Wno-unused-function");
 $ccflags .= try_cflags("-Wno-unused-value");
 $ccflags .= try_cflags("-Wno-unused-function");
@@ -182,6 +185,7 @@ if ( $^O eq 'cygwin'  && $Config{shrpenv} =~ m{\Aenv LD_RUN_PATH=(.*)\Z} ) {
 if ($Config{archname} =~ /x86_64|amd64/ ) {
     $ldflags .= ' -fPIC  -fno-omit-frame-pointer ';
     $ccflags .= ' -fPIC  -fno-omit-frame-pointer ';
+    #$ccflags .= ' -Werror ';
 }
 
 my @Subsystems = grep { ! /^Test$/ } GSLBuilder::subsystems;
