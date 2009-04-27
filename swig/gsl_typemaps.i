@@ -1,4 +1,8 @@
+%ignore GSL_MAJOR_VERSION;
+%ignore GSL_MINOR_VERSION;
 %include "system.i"
+%ignore GSL_NEGZERO;
+%ignore GSL_POSZERO;
 %include "gsl/gsl_nan.h"
 #if defined(GSL_MINOR_VERSION) &&  GSL_MINOR_VERSION >= 12
     %include "gsl/gsl_inline.h"
@@ -6,278 +10,132 @@
 
 %{
     #include "gsl/gsl_nan.h"
-    #include "gsl/gsl_math.h"
-    #include "gsl/gsl_monte.h"
+    #include "../helper/gsl-perl-helper.h"
 %}
 
-/*****************************
- * handle 'double const []' as an input array of doubles
- * We allocate the C array at the begining and free it at the end
- */
-%typemap(in) double const [] {
-    AV *tempav;
-    I32 len;
-    int i;
-    SV **tv;
+%typemap(out) MemArray* {
+    if ($1 == NULL)
+      croak("Invalid results: out of memory?");
+    SvREFCNT_inc($1->perlobj);
+    DEBUG_MEMARRAY("Return ", $1);
+    $result = $1->perlobj;
+    argvi++;
+}
+
+%typemap(in) MemArray* {
+    $1=c_obj($input,MemArray,Math::GSL::MemArray);
+    if (!$1) {
+      croak("Math::GSL : $$1_name is not a MemArray!");
+    }
+    DEBUG_MEMARRAY("Input ",$1);
+}
+
+%define MEMARRAY_TMAP_IN(ctype, perlctype, perlSvXV, const_kw)
+  MemArray *MemArray$argnum = NULL;
+  {
+    MemArray * mem;
     if (!SvROK($input))
         croak("Math::GSL : $$1_name is not a reference!");
-    if (SvTYPE(SvRV($input)) != SVt_PVAV)
-        croak("Math::GSL : $$1_name is not an array ref!");
+    do {
+      if (SvTYPE(SvRV($input)) == SVt_PVAV) {
+          AV * tempav = (AV*)SvRV($input);
+          I32 len = av_len(tempav);
+          int i;
+          SV ** tv;
+          mem = MemArray_allocate(sizeof(ctype), len);
+          if (!mem)
+             croak("Math::GSL : Out of memory");
+          for (i = 0; i <= len; i++) {
+             tv = av_fetch(tempav, i, 0);
+             (($1_ltype)(mem->data))[i] = (ctype)(perlctype) perlSvXV(*tv);
+          }
+          break;
+      } else {
+          if (sv_isobject($input)
+              && sv_derived_from($input, "Math::GSL::MemArray")) {
+              mem = c_obj($input,MemArray,Math::GSL::MemArray);
+          }
+      }
+      croak("Math::GSL : $$1_name is not something I can work with!");
+    } while(0);
+    $1 = mem->data;
+    MemArray$argnum = mem;
+    DEBUG_MEMARRAY("Using(in/"#const_kw " " #ctype ") ", mem);
+  }
+%enddef
 
-    tempav = (AV*)SvRV($input);
-    len = av_len(tempav);
-    $1 = (double *) malloc((len+1)*sizeof(double));
-    for (i = 0; i <= len; i++) {
-        tv = av_fetch(tempav, i, 0);
-        $1[i] = (double) SvNV(*tv);
-    }
-}
-/*  This caused gsl_vector_view  functions to fail, can we 
- *  turn this off for those functions?
-%typemap(freearg) double const [] {
-        if ($1) free($1);
-}
-*/
-
-%apply double const [] { 
-    double *data, double *dest, double *f_in, double *f_out,
-    double data[], const double * src, double x[], double a[], double b[],
-    const double * x, const double * y, const double * w , const double x_array[],
-    const double xrange[], const double yrange[], double * base,
-    const double * base, const double xrange[], const double yrange[] ,
-    const double * array , const double data2[], const double w[] ,
-    double *v,
-    gsl_complex_packed_array data
-};
-
-/*****************************
- * handle 'float const []' as an input array of floats
- * We allocate the C array at the begining and free it at the end
- */
-%typemap(in) float const [] {
-    AV *tempav;
-    I32 len;
-    int i;
-    SV **tv;
-    if (!SvROK($input))
-        croak("Math::GSL : $$1_name is not a reference!");
-    if (SvTYPE(SvRV($input)) != SVt_PVAV)
-        croak("Math::GSL : $$1_name is not an array ref!");
-
-    tempav = (AV*)SvRV($input);
-    len = av_len(tempav);
-    $1 = (float *) malloc((len+1)*sizeof(float));
-    for (i = 0; i <= len; i++) {
-        tv = av_fetch(tempav, i, 0);
-        $1[i] = (float)(double) SvNV(*tv);
-    }
-}
-
-%typemap(freearg) float const [] {
-        if ($1) free($1);
-}
-
-%apply float const [] { 
-    float const *A, float const *B, float const *C
-};
-
-/*****************************
- * handle 'float []' as an in/out array of floats
- * We allocate the C array at the begining and free it at the end
- * We modify the perl array IN PLACE (not sure other langage can do that
- *   but perl can)
- * Note the trick to store some private info before the C array
- * as swig require that $1 points to the C array (as it uses it
- * when calling the gsl function)
- */
-%{
-    struct perl_array {
-        I32 len;
-        AV *array;
-    };
+%define MEMARRAY(ctype, perlctype, perlSvXV)
+%typemap(in) const ctype* %{
+  MEMARRAY_TMAP_IN(ctype, perlctype, perlSvXV, const)
 %}
-
-%typemap(in) float [] {
-    struct perl_array * p_array = 0;   
-    I32 len;
-    AV *array;
-    int i;
-    SV **tv;
-    if (!SvROK($input))
-        croak("Math::GSL : $$1_name is not a reference!");
-    if (SvTYPE(SvRV($input)) != SVt_PVAV)
-        croak("Math::GSL : $$1_name is not an array ref!");
-
-    array = (AV*)SvRV($input);
-    len = av_len(array);
-    p_array = (struct perl_array *) malloc((len+1)*sizeof(float)+sizeof(struct perl_array));
-    p_array->len=len;
-    p_array->array=array;
-    $1 = (float *)&p_array[1];
-    for (i = 0; i <= len; i++) {
-        tv = av_fetch(array, i, 0);
-        $1[i] = (float)(double) SvNV(*tv);
+%typemap(in) ctype* %{
+  MEMARRAY_TMAP_IN(ctype, perlctype, perlSvXV, )
+%}
+%typemap(argout) ctype* {
+    MemArray *mem = MemArray$argnum;
+    if (argvi >= items) {            
+        EXTEND(sp,1);              /* Extend the stack by 1 object */
     }
+    $result = SvREFCNT_inc(mem->perlobj);
+    argvi++;
+    DEBUG_MEMARRAY("Using(argout/" #ctype ") ", mem);
 }
-
-%typemap(argout) float [] {
-    struct perl_array * p_array = 0;
-    int i;
-    SV **tv;
-    p_array=(struct perl_array *)(((char*)$1)-sizeof(struct perl_array));
-    for (i = 0; i <= p_array->len; i++) {
-        double val=(double)(float)($1[i]);
-        tv = av_fetch(p_array->array, i, 0);
-        sv_setnv(*tv, val);
-        if (argvi >= items) {            
-            EXTEND(sp,1);              /* Extend the stack by 1 object */
-        }
-        $result = sv_newmortal();
-        sv_setnv($result, val);
-        argvi++;
-    }
+%typemap(argout) const ctype* %{
+%}
+%typemap(freearg) ctype* %{
+%}
+%typemap(freearg) const ctype* %{
+%}
+%typemap(out) ctype* {
+    %#warning ctype not handled as 'out' type    
 }
+%apply ctype* { ctype[] };
+%apply const ctype* { const ctype[] };
+%enddef
 
-%typemap(freearg) float [] {
-    if ($1) free(((char*)$1)-sizeof(struct perl_array));
-}
+MEMARRAY(long double, double, SvNV)
+MEMARRAY(double, double, SvNV)
+MEMARRAY(float, double, SvNV)
 
-%apply float const [] { 
-    float *C
-};
+MEMARRAY(unsigned long, UV, SvUV)
+MEMARRAY(long, IV, SvIV)
+MEMARRAY(unsigned int, UV, SvUV)
+MEMARRAY(int, IV, SvIV)
+MEMARRAY(unsigned short, UV, SvUV)
+MEMARRAY(short, IV, SvIV)
+MEMARRAY(unsigned char, UV, SvUV)
+MEMARRAY(char, IV, SvIV)
 
-/*****************************
- * handle 'size_t const []' as an input array of size_t
- * We allocate the C array at the begining and free it at the end
+/********************************
+ * For printf formats
  */
-%typemap(in) size_t const [] {
-    AV *tempav;
-    I32 len;
-    int i;
-    SV **tv;
-    if (!SvROK($input))
-        croak("Math::GSL : $$1_name is not a reference!");
-    if (SvTYPE(SvRV($input)) != SVt_PVAV)
-        croak("Math::GSL : $$1_name is not an array ref!");
-
-    tempav = (AV*)SvRV($input);
-    len = av_len(tempav);
-    $1 = (size_t *) malloc((len+1)*sizeof(size_t));
-    for (i = 0; i <= len; i++) {
-        tv = av_fetch(tempav, i, 0);
-        $1[i] = SvIV(*tv);
-    }
+%typemap(in) const char* format {
+    $1=SvPV_nolen($input);
 }
+%typemap(argout) const char* format %{ %}
+%typemap(freearg) const char* format %{ %}
 
-%typemap(freearg) size_t const [] {
-        if ($1) free($1);
-}
-
-%apply size_t const [] { 
-    size_t *p
-}
+%apply const char* format {
+    const char* range_format,
+    const char* bin_format,
+    const char* name,
+    char* filename
+};
 
 /*****************************
  * handle some parameters as input or output
  */
+/*
 %apply int *OUTPUT { size_t *imin, size_t *imax, size_t *neval };
 %apply double * OUTPUT {
     double * min_out, double * max_out,
     double *abserr, double *result
 };
+*/
 
 /*****************************
  * Callback managment
  */
-%{
-    /* structure to hold required information while the gsl function call
-       for each callback
-     */
-    struct gsl_function_perl {
-        gsl_function C_gsl_function;
-        SV * function;
-        SV * params;
-    };
-    struct gsl_monte_function_perl {
-        gsl_monte_function C_gsl_monte_function;
-        SV * f;
-        SV * dim;
-        SV * params;
-    };
-
-
-    /* These functions (C callbacks) calls the perl callbacks.
-       Info for perl callback can be found using the 'void*params' parameter
-    */
-    double call_gsl_function(double x , void *params){
-        struct gsl_function_perl *F=(struct gsl_function_perl*)params;
-        unsigned int count;
-        double y;
-        dSP;
-
-        //fprintf(stderr, "LOOKUP CALLBACK\n");
-        ENTER;
-        SAVETMPS;
-
-        PUSHMARK(SP);
-        XPUSHs(sv_2mortal(newSVnv((double)x)));
-        XPUSHs(F->params);
-        PUTBACK;                                /* make local stack pointer global */
-
-        count = call_sv(F->function, G_SCALAR);
-        SPAGAIN;
-
-        if (count != 1)
-                croak("Expected to call subroutine in scalar context!");
-
-        y = POPn;
-
-        PUTBACK;                                /* make local stack pointer global */
-        FREETMPS;
-        LEAVE;
-         
-        return y;
-    }
-    double call_gsl_monte_function(double *x_array , size_t dim, void *params){
-        struct gsl_monte_function_perl *F=(struct gsl_monte_function_perl*)params;
-        unsigned int count;
-        unsigned int i;
-        AV* perl_array;
-        double y;
-        dSP;
-
-        //fprintf(stderr, "LOOKUP CALLBACK\n");
-        ENTER;
-        SAVETMPS;
-
-        PUSHMARK(SP);
-        perl_array=newAV();
-        sv_2mortal((SV*)perl_array);
-        XPUSHs(sv_2mortal(newRV((SV *)perl_array)));
-        for(i=0; i<dim; i++) {
-                /* no mortal : it is referenced by the array */
-                av_push(perl_array, newSVnv(x_array[i]));
-        }
-        XPUSHs(sv_2mortal(newSViv(dim)));
-        XPUSHs(F->params);
-        PUTBACK;                                /* make local stack pointer global */
-
-        count = call_sv(F->f, G_SCALAR);
-        SPAGAIN;
-
-        if (count != 1)
-                croak("Expected to call subroutine in scalar context!");
-
-        y = POPn;
-
-        PUTBACK;                                /* make local stack pointer global */
-        FREETMPS;
-        LEAVE;
-         
-        return y;
-    }
-%}
-
 %typemap(in) gsl_monte_function * (struct gsl_monte_function_perl w_gsl_monte_function) {
     SV * f = 0;
     SV * dim = 0;

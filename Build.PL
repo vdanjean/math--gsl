@@ -171,7 +171,7 @@ $ccflags .= try_cflags("-Wno-unused-function");
 $ccflags .= try_cflags("-Wno-unused-variable");
 
 
-my $ldflags    = "$gsl_pkgcfg{libs} -gsl";
+my $ldflags    = "$gsl_pkgcfg{libs}";
 my $swig_flags = "$gsl_pkgcfg{cflags}$swig_flags_add"; # -Wall is a bit much
 
 if ( $^O eq 'cygwin'  && $Config{shrpenv} =~ m{\Aenv LD_RUN_PATH=(.*)\Z} ) {
@@ -207,7 +207,7 @@ my $builder = GSLBuilder->new(
     dist_abstract       => 'Interface to the GNU Scientific Library using SWIG',
     dist_author         => 'Jonathan Leto <jonathan@leto.net>',
     dist_version_from   => 'lib/Math/GSL.pm',
-    include_dirs	    => q{},
+    include_dirs	    => [ ],
     extra_linker_flags  => '-shared ' . $ldflags,
     extra_compiler_flags=> "$ccflags " . ($ENV{CC_FLAGS}||''),
     swig_flags          => $swig_flags, 
@@ -225,6 +225,7 @@ my $builder = GSLBuilder->new(
     configure_requires => {
         'ExtUtils::PkgConfig' => '1.03',
     },
+    c_source              => 'helper',
     swig_source           => [  
                                 map { [ "swig/$_.i", "pod/$_.pod" ] } @Subsystems ,
                              ],
