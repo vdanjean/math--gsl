@@ -16,9 +16,25 @@
 %typemap(out) MemArray* {
     if ($1 == NULL)
       croak("Invalid results: out of memory?");
-    SvREFCNT_inc($1->perlobj);
+    if ($1->mortal) {
+      DEBUG_MEMARRAY("Mortal return ", $1);
+      //SvREFCNT_inc($1->perlobj);
+      $1->mortal--;
+    } else {
+      DEBUG_MEMARRAY("Non Mortal return ", $1);
+      //SvREFCNT_inc($1->perlobj);
+      //sv_2mortal($1->perlobj);
+    }
     DEBUG_MEMARRAY("Return ", $1);
-    $result = $1->perlobj;
+    //$result = sv_mortalcopy($1->perlobj);
+    $result = sv_2mortal(newRV_inc(SvRV($1->perlobj)));
+    {
+      MemArray* mem=c_obj($1->perlobj,MemArray,Math::GSL::MemArray);
+      if (mem != $1) {
+	croak("Bad conversion2: mem=%p", mem);
+	abort();
+      }
+    }
     argvi++;
 }
 
@@ -27,6 +43,9 @@
     if (!$1) {
       croak("Math::GSL : $$1_name is not a MemArray!");
     }
+    $1->mortal=0;
+    //SvREFCNT_inc($1->perlobj);
+    //sv_2mortal($1);
     DEBUG_MEMARRAY("Input ",$1);
 }
 
@@ -34,8 +53,9 @@
   MemArray *MemArray$argnum = NULL;
   {
     MemArray * mem;
-    if (!SvROK($input))
+    if (!SvROK($input)) {
         croak("Math::GSL : $$1_name is not a reference!");
+    }
     do {
       if (SvTYPE(SvRV($input)) == SVt_PVAV) {
           AV * tempav = (AV*)SvRV($input);
@@ -54,6 +74,7 @@
           if (sv_isobject($input)
               && sv_derived_from($input, "Math::GSL::MemArray")) {
               mem = c_obj($input,MemArray,Math::GSL::MemArray);
+	      mem->mortal=0;
           }
       }
       croak("Math::GSL : $$1_name is not something I can work with!");

@@ -2,7 +2,11 @@
 
 void MemArray_DESTROY(MemArray* mem) {
     //SvREFCNT_dec(zt->p);
-    DEBUG_MEMARRAY("Free ", mem);
+    DEBUG_MEMARRAY("Free1 ", mem);
+    SvREFCNT_inc(SvRV(mem->perlobj));
+    DEBUG_MEMARRAY("Free2 ", mem);
+    SvREFCNT_dec(mem->perlobj);
+    DEBUG_MEMARRAY("Free3 ", mem);
     Safefree(mem->data);
     Safefree(mem);
     //free(mem->data);
@@ -25,8 +29,24 @@ MemArray* MemArray_allocate(size_t sz, size_t nb) {
     }
     mem->perlobj=perl_obj(mem, MemArray, Math::GSL::MemArray);
     DEBUG_MEMARRAY("PreAllocate ", mem);
-    mem->perlobj=sv_2mortal(mem->perlobj);
+    //mem->perlobj=sv_2mortal(mem->perlobj);
+    sv_2mortal(SvRV(mem->perlobj));
+    mem->mortal=1;
     DEBUG_MEMARRAY("Allocate ", mem);
+    {
+	    MemArray* mem2=c_obj(mem->perlobj,MemArray,Math::GSL::MemArray);
+	    if (mem != mem2) {
+		    fprintf(stderr,"Bad conversion: mem=%p\n", mem2);
+		    abort();
+	    }
+	    SV* sv=mem->perlobj; MAGIC*magic;
+	    if (SvGMAGICAL(sv) && (magic=mg_find(sv, PERL_MAGIC_ext))
+		&& (magic->mg_ptr==mem)) {
+		    fprintf(stderr,"\n\nSucess convert\n\n");		    
+	    } else {
+		    fprintf(stderr,"ERROR: %d, %d\n", SvTYPE(sv), SVt_PVMG);
+	    }
+    }
     return mem;
 }
 

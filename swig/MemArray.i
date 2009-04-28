@@ -15,6 +15,8 @@ typedef struct {
    int b;
 } essai;
 
+MemArray* pass(MemArray* mem) { return mem; }
+
 %}
 
 %include "../pod/MemArray.pod"
