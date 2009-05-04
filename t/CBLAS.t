@@ -4,6 +4,7 @@ use Test::More tests => 6;
 use Math::GSL::Test  qw/:all/;
 use Math::GSL::CBLAS qw/:all/;
 use Math::GSL        qw/:all/;
+use Math::GSL::MemArray qw/:all/;
 use Math::GSL::Errno qw/:all/;
 use Data::Dumper;
 use strict;
@@ -33,12 +34,16 @@ sub TEST_CBLAS : Tests {
        # Compute C = A * B 
        # C  = [ 367.76 368.12 ]
         #     [ 674.06 674.72 ]
-       my @stuff = cblas_sgemm ($CblasRowMajor,
+       my $stuff = to_array(cblas_dgemm ($CblasRowMajor,
                     $CblasNoTrans, $CblasNoTrans, 2, 2, 3,
-                    1.0, $A, $lda, $B, $ldb, 0.0, $C, $ldc);
-       #warn Dumper [ @stuff ];
-       ok(is_similar_relative( \@stuff, [ 367.76, 368.12 , 674.06, 674.72 ], '.01' ),'cblas_sgemm');
+                    1.0, $A, $lda, $B, $ldb, 0.0, $C, $ldc));
+       warn Dumper [ $stuff ];
+       ok(is_similar_relative( $stuff, [ 367.76, 368.12 , 674.06, 674.72 ], '.01' ),'cblas_sgemm');
 }
+
+Test::Class->runtests;
+
+__END__
 
 sub CBLAS_IDAMAX : Tests {
    my $N = 1;

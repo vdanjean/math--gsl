@@ -75,27 +75,21 @@ typedef struct CObject {
 } CObject;
 
 typedef struct MemArray {
-	CObject plink;
+	/*CObject plink;*/
 	SV* perlobj;
 	size_t datasize;
+	size_t nb_elem;
 	void* data;
-	int mortal;
 } MemArray;
 
 #define DEBUG_MEMARRAY(start, mem) \
 	({	\
-		SV* ref=(mem->perlobj && (SvROK(mem->perlobj))) ? SvRV(mem->perlobj) : 0; \
 		fprintf(stderr, "*** " start				\
-			"MemArray[%i] (data: %ld @ %p, perlobj %d @ %p [%i] " \
-			"-> %d @ %p [%i]) @ %p\n",			\
-			mem->mortal,					\
+			"MemArray (data: %ld @ %p, perlobj %d @ %p [%i]) @ %p\n", \
 			mem->datasize, mem->data,			\
-			mem->perlobj ? SvREFCNT(mem->perlobj) : 0,	\
-			mem->perlobj,					\
-			mem->perlobj ? SvTYPE(mem->perlobj) : 0,	\
-			ref ? SvREFCNT(ref) : SvROK(mem->perlobj),	\
-			ref ? ref : 0,					\
-			ref ? SvTYPE(ref) : -1,				\
+			mem->perlobj ? SvREFCNT(mem->perlobj) : 0, \
+			mem->perlobj,				\
+			mem->perlobj ? SvTYPE(mem->perlobj) : 0, \
 			mem);						\
 	})
 

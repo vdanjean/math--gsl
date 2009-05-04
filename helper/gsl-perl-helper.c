@@ -1,13 +1,10 @@
 #include "gsl-perl-helper.h"
 
 void MemArray_DESTROY(MemArray* mem) {
-    //SvREFCNT_dec(zt->p);
     DEBUG_MEMARRAY("Free1 ", mem);
-    SvREFCNT_inc(SvRV(mem->perlobj));
     DEBUG_MEMARRAY("Free2 ", mem);
-    SvREFCNT_dec(mem->perlobj);
-    DEBUG_MEMARRAY("Free3 ", mem);
     Safefree(mem->data);
+    DEBUG_MEMARRAY("Free3 ", mem);
     Safefree(mem);
     //free(mem->data);
     //free(mem);
@@ -15,33 +12,35 @@ void MemArray_DESTROY(MemArray* mem) {
 
 MemArray* MemArray_allocate(size_t sz, size_t nb) {
     MemArray *mem;
+    SV *ref;
     Newx(mem, 1, MemArray);
     //mem=malloc(sizeof(MemArray));
     if (!mem) {
       return NULL;
     }
     mem->datasize=sz*nb;
+    mem->nb_elem=nb;
+    fprintf(stderr, "Allocate %i bytes\n", mem->datasize);
     Newxc(mem->data, mem->datasize, char, void*);
     //mem->data=malloc(mem->datasize);
     if (!mem->data) {
       free(mem);
       return NULL;
     }
-    mem->perlobj=perl_obj(mem, MemArray, Math::GSL::MemArray);
+    ref=perl_obj(mem, MemArray, Math::GSL::MemArray);
+    mem->perlobj=SvRV(ref);
     DEBUG_MEMARRAY("PreAllocate ", mem);
-    //mem->perlobj=sv_2mortal(mem->perlobj);
-    sv_2mortal(SvRV(mem->perlobj));
-    mem->mortal=1;
+    sv_2mortal(ref);
     DEBUG_MEMARRAY("Allocate ", mem);
     {
-	    MemArray* mem2=c_obj(mem->perlobj,MemArray,Math::GSL::MemArray);
+	    MemArray* mem2=c_obj(ref,MemArray,Math::GSL::MemArray);
 	    if (mem != mem2) {
 		    fprintf(stderr,"Bad conversion: mem=%p\n", mem2);
 		    abort();
 	    }
-	    SV* sv=mem->perlobj; MAGIC*magic;
+	    SV* sv=ref; MAGIC*magic;
 	    if (SvGMAGICAL(sv) && (magic=mg_find(sv, PERL_MAGIC_ext))
-		&& (magic->mg_ptr==mem)) {
+		&& (magic->mg_ptr==(void*)mem)) {
 		    fprintf(stderr,"\n\nSucess convert\n\n");		    
 	    } else {
 		    fprintf(stderr,"ERROR: %d, %d\n", SvTYPE(sv), SVt_PVMG);

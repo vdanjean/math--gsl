@@ -16,22 +16,13 @@
 %typemap(out) MemArray* {
     if ($1 == NULL)
       croak("Invalid results: out of memory?");
-    if ($1->mortal) {
-      DEBUG_MEMARRAY("Mortal return ", $1);
-      //SvREFCNT_inc($1->perlobj);
-      $1->mortal--;
-    } else {
-      DEBUG_MEMARRAY("Non Mortal return ", $1);
-      //SvREFCNT_inc($1->perlobj);
-      //sv_2mortal($1->perlobj);
-    }
+    DEBUG_MEMARRAY("Start return ", $1);
+    $result = sv_2mortal(newRV_inc($1->perlobj));
     DEBUG_MEMARRAY("Return ", $1);
-    //$result = sv_mortalcopy($1->perlobj);
-    $result = sv_2mortal(newRV_inc(SvRV($1->perlobj)));
     {
-      MemArray* mem=c_obj($1->perlobj,MemArray,Math::GSL::MemArray);
+      MemArray* mem=c_obj($result,MemArray,Math::GSL::MemArray);
       if (mem != $1) {
-	croak("Bad conversion2: mem=%p", mem);
+	croak("Math::GSL : Internal error: mem=%p", mem);
 	abort();
       }
     }
@@ -43,9 +34,6 @@
     if (!$1) {
       croak("Math::GSL : $$1_name is not a MemArray!");
     }
-    $1->mortal=0;
-    //SvREFCNT_inc($1->perlobj);
-    //sv_2mortal($1);
     DEBUG_MEMARRAY("Input ",$1);
 }
 
@@ -62,19 +50,23 @@
           I32 len = av_len(tempav);
           int i;
           SV ** tv;
-          mem = MemArray_allocate(sizeof(ctype), len);
+          mem = MemArray_allocate(sizeof(ctype), len+1);
           if (!mem)
              croak("Math::GSL : Out of memory");
+	  fprintf(stderr, "Loading @ %p: ", mem->data);
           for (i = 0; i <= len; i++) {
+	     ctype val;
              tv = av_fetch(tempav, i, 0);
-             (($1_ltype)(mem->data))[i] = (ctype)(perlctype) perlSvXV(*tv);
+	     val = (ctype)(perlctype) perlSvXV(*tv);
+	     fprintf(stderr, "%lf ", val);
+             (($1_ltype)(mem->data))[i] = val;
           }
+	  fprintf(stderr, "\n");
           break;
       } else {
           if (sv_isobject($input)
               && sv_derived_from($input, "Math::GSL::MemArray")) {
               mem = c_obj($input,MemArray,Math::GSL::MemArray);
-	      mem->mortal=0;
           }
       }
       croak("Math::GSL : $$1_name is not something I can work with!");
@@ -97,7 +89,7 @@
     if (argvi >= items) {            
         EXTEND(sp,1);              /* Extend the stack by 1 object */
     }
-    $result = SvREFCNT_inc(mem->perlobj);
+    $result = sv_2mortal(newRV_inc(mem->perlobj));
     argvi++;
     DEBUG_MEMARRAY("Using(argout/" #ctype ") ", mem);
 }

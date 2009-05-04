@@ -24,15 +24,32 @@ BEGIN{ gsl_set_error_handler_off(); }
 sub make_fixture : Test(setup) {
     my $self = shift;
     #$self->{object} = Math::GSL::MemArray->new([1 .. 5 ]);
-    $self->{object} = Math::GSL::MemArray::allocate(8,2);
-    print STDERR "OBJ: ", $self->{object}, "\n";
-    $self->{object}->DESTROY();
-    print STDERR "OBJ2: ", $self->{object}, "\n";
+    my $ref= Math::GSL::MemArray::allocate(8,2);
+    print STDERR "OBJ: ", $ref, ", @{$ref}\n";
+    undef $ref;
+    $ref= Math::GSL::MemArray::allocate(8,2);
+    #print STDERR "NEWOBJ: ", $ref, ", @{$ref}\n";
+    my $ref2=Math::GSL::MemArray::pass($ref);
+    my $ref3=Math::GSL::MemArray::pass($ref);
+    my $ref4=Math::GSL::MemArray::pass($ref2);
+    #$self->{object}->DESTROY();
+    #push @{$ref}, 42;
+    print STDERR "NEWOBJ: ", $ref, ", @{$ref}\n";
+    print STDERR "NEWOBJ: ", $ref, ", ", @{Math::GSL::MemArray::to_array($ref)},"\n";
+    #print STDERR "NEWOBJ: ", $ref, ", @{$ref}\n";
+    #print STDERR "NEWOBJ: ", $ref, ", @{$ref}\n";
+    my $a=2;
+    my $b=\$ref;
+    #$$b++;
+    print STDERR "OBJ2: ", $ref2, " a=$a, b=$$b\n";
+    $ref2++;
+    print STDERR "OBJ2++: ", $ref2, "\n";
     #my $test=Critter->new;
     #print STDERR "OBJ: ", $test, "\n";
     #$test->DESTROY();
     #print STDERR "OBJ2: ", $test, "\n";
     #$test->open("< /tmp/a.bib");
+    $self->{object} = $ref;
 }
 
 sub MEM_ARRAY_TYPE : Test { 

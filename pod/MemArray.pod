@@ -3,7 +3,7 @@ use Scalar::Util 'blessed';
 use Data::Dumper;
 use Carp qw/croak/;
 
-@EXPORT_all  = qw/allocate
+@EXPORT_all  = qw/allocate to_array
 /;
 
 @EXPORT_OK = (@EXPORT_all);
